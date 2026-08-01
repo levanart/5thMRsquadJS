@@ -25,6 +25,8 @@ import squadLeaderRole from './squad-leader-role';
 import voteMap from './votemap';
 import voteMapMods from './votemapmods';
 import warnPlayers from './warn-players';
+import seedKillfeed from './seed-killfeed';
+import roundTopsBroadcast from './round-tops-broadcast';
 
 export interface LegacyManifestEntry {
   name: string;
@@ -60,4 +62,6 @@ export const nativeManifest: SquadPlugin[] = [
   rnsStats,
   skipmap,
   seed,
+  seedKillfeed,
+  roundTopsBroadcast,
 ];
