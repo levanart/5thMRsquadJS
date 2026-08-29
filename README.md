@@ -1,4 +1,4 @@
- # RNSquadJS
+# RNSquadJS
 
 A multi-server management daemon for [Squad](https://joinsquad.com/) dedicated
 servers. It connects to a server over RCON, tails the server log, and runs a set
