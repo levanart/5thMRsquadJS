@@ -35,6 +35,23 @@
         }
       },
       {
+        "name": "seedKillfeed",
+        "enabled": false,
+        "options": {
+          "seedKeyword": "Seed",
+          "seedLayers": ["Sumari_Seed_v1", "Logar_Seed_v1", "Mestia_Seed_v1"],
+          "message": "Ты убил противника: {victim}",
+          "maxMessageBytes": 512,
+          "dedupeWindowMs": 5000,
+          "contextTtlMs": 300000,
+          "maxQueueSize": 25,
+          "sendTimeoutMs": 5000,
+          "sendRetries": 1,
+          "retryDelayMs": 1000,
+          "failureCooldownMs": 30000
+        }
+      },
+      {
         "name": "rnsStats",
         "enabled": true,
         "options": {
