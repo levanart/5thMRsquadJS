@@ -1,4 +1,9 @@
-import { TPlayerDied, TPlayerRevived } from 'squad-logs';
+import {
+  TPlayerDamaged,
+  TPlayerDied,
+  TPlayerRevived,
+  TPlayerWounded,
+} from 'squad-logs';
 import { z } from 'zod';
 import { EVENTS } from '../constants';
 import { adminBroadcast } from '../core';
@@ -6,6 +11,17 @@ import { definePlugin } from '../core/plugin';
 import { TPlayer } from '../types';
 
 const MAX_PLAYER_NAME_LENGTH = 64;
+const COMBAT_CONTEXT_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_KNIFE_WEAPONS = [
+  'Knife',
+  'Bayonet',
+  'Bayo',
+  'SOCP',
+  'QNL-95',
+  'OKC-3S',
+  'Machete',
+  'Melee',
+];
 const CONTROL_CHARACTERS =
   /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 
@@ -17,23 +33,37 @@ const optionsSchema = z.object({
   separator: z.string().max(32).default(' | '),
   entryTemplate: z.string().max(512).default('{place}. {name} — {value}'),
   killsTitle: z.string().max(128).default('Топ по убийствам'),
+  knifeKillsTitle: z.string().max(128).default('Топ по убийствам ножом'),
   revivesTitle: z.string().max(128).default('Топ медик (поднятия)'),
   deathsTitle: z.string().max(128).default('Топ смертей'),
+  knifeWeapons: z
+    .array(z.string().trim().min(1).max(128))
+    .max(100)
+    .default(DEFAULT_KNIFE_WEAPONS),
   maxMessageBytes: z.coerce.number().int().min(128).max(4096).default(1024),
   sendTimeoutMs: z.coerce.number().int().min(500).max(60000).default(5000),
   sendRetries: z.coerce.number().int().min(0).max(2).default(1),
   retryDelayMs: z.coerce.number().int().min(0).max(30000).default(2000),
 });
 
-type CounterKey = 'kills' | 'revives' | 'deaths';
+type CounterKey = 'kills' | 'knifeKills' | 'revives' | 'deaths';
 
 interface PlayerRoundStats {
   id: string;
   name: string;
   teamID?: string;
   kills: number;
+  knifeKills: number;
   revives: number;
   deaths: number;
+}
+
+interface CombatContext {
+  weapon: string;
+  attackerSteamID?: string;
+  attackerEOSID?: string;
+  attackerPlayerController?: string;
+  createdAt: number;
 }
 
 class BroadcastTimeoutError extends Error {}
@@ -69,6 +99,13 @@ const normalizeName = (name: string): string =>
 const canonicalName = (name: string): string =>
   cleanText(name).toLocaleLowerCase('ru-RU');
 
+const isKnifeWeapon = (weapon: string, knifeWeapons: string[]): boolean => {
+  const normalizedWeapon = canonicalName(weapon);
+  return knifeWeapons.some((candidate) =>
+    normalizedWeapon.includes(canonicalName(candidate)),
+  );
+};
+
 const namesMatch = (playerName: string, logName: string): boolean => {
   const full = canonicalName(playerName);
   const observed = canonicalName(logName);
@@ -103,6 +140,7 @@ export default definePlugin({
     const { listener, execute } = state;
     const stats = new Map<string, PlayerRoundStats>();
     const knownPlayers = new Map<string, TPlayer>();
+    const combatContexts = new Map<string, CombatContext>();
     const ambiguousNameAliases = new Set<string>();
     let playersSnapshotReady = true;
     let broadcastedThisRound = false;
@@ -168,6 +206,7 @@ export default definePlugin({
 
     const mergeStats = (target: PlayerRoundStats, source: PlayerRoundStats) => {
       target.kills += source.kills;
+      target.knifeKills += source.knifeKills;
       target.revives += source.revives;
       target.deaths += source.deaths;
     };
@@ -185,6 +224,7 @@ export default definePlugin({
           name: cleanName,
           teamID,
           kills: 0,
+          knifeKills: 0,
           revives: 0,
           deaths: 0,
         };
@@ -239,6 +279,7 @@ export default definePlugin({
       cancelBroadcastSequence();
       stats.clear();
       knownPlayers.clear();
+      combatContexts.clear();
       ambiguousNameAliases.clear();
       playersSnapshotReady = false;
       broadcastedThisRound = false;
@@ -247,6 +288,68 @@ export default definePlugin({
     const onPlayersUpdated = (players: TPlayer[]) => {
       playersSnapshotReady = true;
       for (const player of players ?? []) rememberPlayer(player);
+    };
+
+    const rememberCombatContext = (
+      victimName: string,
+      weapon: string,
+      attacker: {
+        steamID?: string;
+        eosID?: string;
+        playerController?: string;
+      },
+    ) => {
+      if (!victimName || !weapon) return;
+      combatContexts.set(canonicalName(victimName), {
+        weapon,
+        attackerSteamID: attacker.steamID,
+        attackerEOSID: attacker.eosID,
+        attackerPlayerController: attacker.playerController,
+        createdAt: Date.now(),
+      });
+    };
+
+    const onPlayerDamaged = (data: TPlayerDamaged) => {
+      rememberCombatContext(data.victimName, data.weapon, {
+        steamID: data.attackerSteamID,
+        eosID: data.attackerEOSID,
+        playerController: data.attackerController,
+      });
+    };
+
+    const onPlayerWounded = (data: TPlayerWounded) => {
+      rememberCombatContext(data.victimName, data.weapon, {
+        steamID: data.attackerSteamID,
+        eosID: data.attackerEOSID,
+        playerController: data.attackerPlayerController,
+      });
+    };
+
+    const takeMatchingCombatContext = (
+      data: TPlayerDied,
+    ): CombatContext | null => {
+      const key = canonicalName(data.victimName);
+      const context = combatContexts.get(key);
+      combatContexts.delete(key);
+      if (!context || Date.now() - context.createdAt > COMBAT_CONTEXT_TTL_MS) {
+        return null;
+      }
+
+      const deathHasAttackerIdentity = Boolean(
+        data.attackerSteamID ||
+        data.attackerEOSID ||
+        data.attackerPlayerController,
+      );
+      if (!deathHasAttackerIdentity) return context;
+
+      const sameAttacker =
+        (Boolean(data.attackerSteamID) &&
+          data.attackerSteamID === context.attackerSteamID) ||
+        (Boolean(data.attackerEOSID) &&
+          data.attackerEOSID === context.attackerEOSID) ||
+        (Boolean(data.attackerPlayerController) &&
+          data.attackerPlayerController === context.attackerPlayerController);
+      return sameAttacker ? context : null;
     };
 
     const wait = (delayMs: number, signal: AbortSignal): Promise<boolean> => {
@@ -342,6 +445,7 @@ export default definePlugin({
 
     const onPlayerDied = (data: TPlayerDied) => {
       const victimName = normalizeName(data.victimName);
+      const combatContext = takeMatchingCombatContext(data);
       const victimResolution = findKnownPlayerByName(victimName);
       const victim = victimResolution.player;
       if (victimResolution.ambiguous) {
@@ -370,10 +474,21 @@ export default definePlugin({
       if (!attacker.teamID || !victim.teamID) return;
       if (attacker.teamID === victim.teamID) return;
 
-      getForPlayer(attacker).kills++;
+      const attackerStats = getForPlayer(attacker);
+      attackerStats.kills++;
+      const isKnifeKill =
+        isKnifeWeapon(data.weapon, options.knifeWeapons) ||
+        Boolean(
+          combatContext &&
+          isKnifeWeapon(combatContext.weapon, options.knifeWeapons),
+        );
+      if (isKnifeKill) {
+        attackerStats.knifeKills++;
+      }
     };
 
     const onPlayerRevived = (data: TPlayerRevived) => {
+      combatContexts.delete(canonicalName(data.victimName));
       const knownReviver = findKnownPlayerByIDs({
         steamID: data.reviverSteamID,
         eosID: data.reviverEOSID,
@@ -449,6 +564,7 @@ export default definePlugin({
 
       const messages = [
         topLine(options.killsTitle, 'kills'),
+        topLine(options.knifeKillsTitle, 'knifeKills'),
         topLine(options.revivesTitle, 'revives'),
         topLine(options.deathsTitle, 'deaths'),
       ];
@@ -457,6 +573,8 @@ export default definePlugin({
 
     rememberCurrentPlayers();
     listener.on(EVENTS.UPDATED_PLAYERS, onPlayersUpdated);
+    listener.on(EVENTS.PLAYER_DAMAGED, onPlayerDamaged);
+    listener.on(EVENTS.PLAYER_WOUNDED, onPlayerWounded);
     listener.on(EVENTS.PLAYER_DIED, onPlayerDied);
     listener.on(EVENTS.PLAYER_REVIVED, onPlayerRevived);
     listener.on(EVENTS.ROUND_ENDED, onRoundEnded);
@@ -467,6 +585,8 @@ export default definePlugin({
     registerDisposable(() => {
       disposed = true;
       listener.off(EVENTS.UPDATED_PLAYERS, onPlayersUpdated);
+      listener.off(EVENTS.PLAYER_DAMAGED, onPlayerDamaged);
+      listener.off(EVENTS.PLAYER_WOUNDED, onPlayerWounded);
       listener.off(EVENTS.PLAYER_DIED, onPlayerDied);
       listener.off(EVENTS.PLAYER_REVIVED, onPlayerRevived);
       listener.off(EVENTS.ROUND_ENDED, onRoundEnded);
@@ -474,6 +594,7 @@ export default definePlugin({
       cancelBroadcastSequence();
       stats.clear();
       knownPlayers.clear();
+      combatContexts.clear();
       ambiguousNameAliases.clear();
     });
   },

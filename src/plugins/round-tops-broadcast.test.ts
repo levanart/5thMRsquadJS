@@ -1,4 +1,4 @@
-import { TPlayerDied, TPlayerRevived } from 'squad-logs';
+import { TPlayerDied, TPlayerRevived, TPlayerWounded } from 'squad-logs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EVENTS } from '../constants';
 import { createFakeState, makePlayer } from '../test/fakes';
@@ -17,6 +17,20 @@ const died = (overrides: Partial<TPlayerDied> = {}): TPlayerDied => ({
   attackerSteamID: 'attacker-steam',
   weapon: 'Rifle',
   event: EVENTS.PLAYER_DIED,
+  ...overrides,
+});
+
+const wounded = (overrides: Partial<TPlayerWounded> = {}): TPlayerWounded => ({
+  raw: '',
+  time: '',
+  chainID: '',
+  victimName: 'Victim',
+  damage: 100,
+  attackerPlayerController: 'attacker-controller',
+  attackerEOSID: 'attacker-eos',
+  attackerSteamID: 'attacker-steam',
+  weapon: 'BP_AK74Bayonet_C',
+  event: EVENTS.PLAYER_WOUNDED,
   ...overrides,
 });
 
@@ -66,7 +80,7 @@ describe('roundTopsBroadcast', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('publishes kills, revives and deaths sequentially', async () => {
+  it('publishes kills, knife kills, revives and deaths sequentially', async () => {
     const attacker = makePlayer({
       name: 'Attacker',
       steamID: 'attacker-steam',
@@ -96,10 +110,92 @@ describe('roundTopsBroadcast', () => {
     listener.emit(EVENTS.ROUND_ENDED);
     await vi.runAllTimersAsync();
 
-    expect(commands).toHaveLength(3);
+    expect(commands).toHaveLength(4);
     expect(commands[0]).toContain('Attacker — 1');
-    expect(commands[1]).toContain('Medic — 1');
-    expect(commands[2]).toContain('Victim — 1');
+    expect(commands[1]).toContain('нет данных');
+    expect(commands[2]).toContain('Medic — 1');
+    expect(commands[3]).toContain('Victim — 1');
+  });
+
+  it('counts a knife kill from the matching wound context', async () => {
+    const attacker = makePlayer({
+      name: 'Attacker',
+      steamID: 'attacker-steam',
+      eosID: 'attacker-eos',
+      playerController: 'attacker-controller',
+      teamID: '1',
+    });
+    const victim = makePlayer({
+      name: 'Victim',
+      steamID: 'victim-steam',
+      eosID: 'victim-eos',
+      teamID: '2',
+    });
+    const { state, listener, commands } = createFakeState({
+      players: [attacker, victim],
+    });
+    setupPlugin(state);
+
+    listener.emit(EVENTS.PLAYER_WOUNDED, wounded());
+    listener.emit(EVENTS.PLAYER_DIED, died({ weapon: 'BP_Soldier_RUS_C' }));
+    listener.emit(EVENTS.ROUND_ENDED);
+    await vi.runAllTimersAsync();
+
+    expect(commands[1]).toContain('Attacker — 1');
+  });
+
+  it('counts a knife kill reported directly by the death event', async () => {
+    const attacker = makePlayer({
+      name: 'Attacker',
+      steamID: 'attacker-steam',
+      eosID: 'attacker-eos',
+      playerController: 'attacker-controller',
+      teamID: '1',
+    });
+    const victim = makePlayer({
+      name: 'Victim',
+      steamID: 'victim-steam',
+      eosID: 'victim-eos',
+      teamID: '2',
+    });
+    const { state, listener, commands } = createFakeState({
+      players: [attacker, victim],
+    });
+    setupPlugin(state);
+
+    listener.emit(EVENTS.PLAYER_DIED, died({ weapon: 'BP_Knife_M9_C' }));
+    listener.emit(EVENTS.ROUND_ENDED);
+    await vi.runAllTimersAsync();
+
+    expect(commands[1]).toContain('Attacker — 1');
+  });
+
+  it('does not reuse knife context after the victim is revived', async () => {
+    const attacker = makePlayer({
+      name: 'Attacker',
+      steamID: 'attacker-steam',
+      eosID: 'attacker-eos',
+      playerController: 'attacker-controller',
+      teamID: '1',
+    });
+    const victim = makePlayer({
+      name: 'Victim',
+      steamID: 'victim-steam',
+      eosID: 'victim-eos',
+      teamID: '2',
+    });
+    const { state, listener, commands } = createFakeState({
+      players: [attacker, victim],
+    });
+    setupPlugin(state);
+
+    listener.emit(EVENTS.PLAYER_WOUNDED, wounded());
+    listener.emit(EVENTS.PLAYER_REVIVED, revived());
+    listener.emit(EVENTS.PLAYER_DIED, died({ weapon: 'BP_Rifle_C' }));
+    listener.emit(EVENTS.ROUND_ENDED);
+    await vi.runAllTimersAsync();
+
+    expect(commands[1]).toContain('нет данных');
   });
 
   it('matches a unique victim when the log omits a clan tag', async () => {
@@ -126,7 +222,7 @@ describe('roundTopsBroadcast', () => {
     await vi.runAllTimersAsync();
 
     expect(commands[0]).toContain('Attacker — 1');
-    expect(commands[2]).toContain('[TAG] Victim — 1');
+    expect(commands[3]).toContain('[TAG] Victim — 1');
   });
 
   it('does not guess a victim when display names are duplicated', async () => {
@@ -161,7 +257,7 @@ describe('roundTopsBroadcast', () => {
     await vi.runAllTimersAsync();
 
     expect(commands[0]).toContain('нет данных');
-    expect(commands[2]).toContain('нет данных');
+    expect(commands[3]).toContain('нет данных');
   });
 
   it('excludes suicides and teamkills from kills while retaining deaths', async () => {
@@ -183,7 +279,10 @@ describe('roundTopsBroadcast', () => {
     });
     setupPlugin(state);
 
-    listener.emit(EVENTS.PLAYER_DIED, died({ victimName: 'Teammate' }));
+    listener.emit(
+      EVENTS.PLAYER_DIED,
+      died({ victimName: 'Teammate', weapon: 'BP_Knife_C' }),
+    );
     listener.emit(
       EVENTS.PLAYER_DIED,
       died({
@@ -196,8 +295,9 @@ describe('roundTopsBroadcast', () => {
     await vi.runAllTimersAsync();
 
     expect(commands[0]).toContain('нет данных');
-    expect(commands[2]).toContain('Attacker — 1');
-    expect(commands[2]).toContain('Teammate — 1');
+    expect(commands[1]).toContain('нет данных');
+    expect(commands[3]).toContain('Attacker — 1');
+    expect(commands[3]).toContain('Teammate — 1');
   });
 
   it('merges an earlier name-only death after the player is identified', async () => {
@@ -217,8 +317,8 @@ describe('roundTopsBroadcast', () => {
     listener.emit(EVENTS.ROUND_ENDED);
     await vi.runAllTimersAsync();
 
-    expect(commands[2]).toContain('[TAG] Victim — 2');
-    expect(commands[2].match(/Victim/g)).toHaveLength(1);
+    expect(commands[3]).toContain('[TAG] Victim — 2');
+    expect(commands[3].match(/Victim/g)).toHaveLength(1);
   });
 
   it('cancels old-round messages and allows the next round to publish', async () => {
@@ -235,8 +335,8 @@ describe('roundTopsBroadcast', () => {
 
     listener.emit(EVENTS.UPDATED_PLAYERS, state.players);
     listener.emit(EVENTS.ROUND_ENDED);
-    await vi.advanceTimersByTimeAsync(2500);
-    expect(commands).toHaveLength(4);
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(commands).toHaveLength(5);
   });
 
   it('sanitizes control characters and does one-pass template replacement', async () => {
@@ -297,7 +397,7 @@ describe('roundTopsBroadcast', () => {
     listener.emit(EVENTS.ROUND_ENDED);
     await vi.runAllTimersAsync();
 
-    expect(commands).toHaveLength(4);
+    expect(commands).toHaveLength(5);
     expect(commands[0]).toBe(commands[1]);
   });
 
@@ -328,6 +428,7 @@ describe('roundTopsBroadcast', () => {
     await vi.advanceTimersByTimeAsync(5000);
 
     expect(commands).toHaveLength(1);
+    expect(listener.listenerCount(EVENTS.PLAYER_WOUNDED)).toBe(0);
     expect(listener.listenerCount(EVENTS.PLAYER_DIED)).toBe(0);
     expect(listener.listenerCount(EVENTS.NEW_GAME)).toBe(0);
   });
@@ -338,5 +439,6 @@ describe('roundTopsBroadcast', () => {
     expect(schema?.safeParse({ topLimit: 11 }).success).toBe(false);
     expect(schema?.safeParse({ messageDelayMs: 120001 }).success).toBe(false);
     expect(schema?.safeParse({ maxMessageBytes: 4097 }).success).toBe(false);
+    expect(schema?.safeParse({ knifeWeapons: [''] }).success).toBe(false);
   });
 });
