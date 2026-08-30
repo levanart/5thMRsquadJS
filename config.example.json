@@ -335,6 +335,25 @@
           "whitelistTags": [],
           "blacklistTags": []
         }
+      },
+      {
+        "name": "roundTopsBroadcast",
+        "enabled": false,
+        "options": {
+          "topLimit": 3,
+          "messageDelayMs": 10000,
+          "minValue": 1,
+          "emptyText": "нет данных",
+          "separator": " | ",
+          "entryTemplate": "{place}. {name} — {value}",
+          "killsTitle": "Топ по убийствам",
+          "revivesTitle": "Топ медик (поднятия)",
+          "deathsTitle": "Топ смертей",
+          "maxMessageBytes": 1024,
+          "sendTimeoutMs": 5000,
+          "sendRetries": 1,
+          "retryDelayMs": 2000
+        }
       }
     ]
   }

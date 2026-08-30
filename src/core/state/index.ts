@@ -63,10 +63,34 @@ export const initState = async (id: number, getAdmins: TGetAdmins) => {
         }
 
         if (event === EVENTS.NEW_GAME) {
-          await updateAdmins(id, getAdmins);
-          await updateCurrentMap(id);
-          await updateNextMap(id);
-          await updateServerInfo(id);
+          // Раундовые плагины должны сброситься до любых RCON/файловых
+          // обновлений. Иначе события начала нового матча успевают попасть в
+          // состояние прошлого раунда, а ошибка обновления подавляет NEW_GAME.
+          try {
+            listener.emit(event, data);
+          } catch (err) {
+            state.logger.error(`Ошибка обработчика NEW_GAME: ${String(err)}`);
+          }
+
+          const refreshes: Array<[string, () => Promise<unknown>]> = [
+            ['players', () => updatePlayers(id)],
+            ['squads', () => updateSquads(id)],
+            ['current map', () => updateCurrentMap(id)],
+            ['next map', () => updateNextMap(id)],
+            ['server info', () => updateServerInfo(id)],
+            ['admins', () => updateAdmins(id, getAdmins)],
+          ];
+
+          for (const [name, refresh] of refreshes) {
+            try {
+              await refresh();
+            } catch (err) {
+              state.logger.error(
+                `Ошибка обновления ${name} после NEW_GAME: ${String(err)}`,
+              );
+            }
+          }
+          return;
         }
 
         if (event === EVENTS.TICK_RATE) {
