@@ -2,6 +2,7 @@ import {
   AnyBulkWriteOperation,
   Collection,
   Db,
+  Filter,
   MongoClient,
   UpdateFilter,
 } from 'mongodb';
@@ -45,18 +46,10 @@ export interface MatchHistoryEntry {
 }
 
 export type IncidentType =
-  | 'rapid_kills'
-  | 'mass_tk'
-  | 'fob_grief'
-  | 'headshot'
-  | 'knife_spree';
+  'rapid_kills' | 'mass_tk' | 'fob_grief' | 'headshot' | 'knife_spree';
 export type IncidentSeverity = 'high' | 'medium' | 'low';
 export type IncidentStatus =
-  | 'new'
-  | 'reviewing'
-  | 'banned'
-  | 'false'
-  | 'reviewed';
+  'new' | 'reviewing' | 'banned' | 'false' | 'reviewed';
 
 export interface IncidentKill {
   ts: number;
@@ -142,6 +135,7 @@ export interface Main {
   slRating?: PlayerRating;
   date?: number;
   seedRole?: boolean;
+  bonusAccrual?: Record<string, { lastMinuteSlot: number }>;
   lastActiveAt?: number;
 }
 
@@ -390,10 +384,11 @@ export async function createUserIfNullableOrUpdateName(
   steamID: string,
   name: string,
   eosID?: string,
-): Promise<void> {
+): Promise<boolean> {
   const h = handle(serverId);
-  if (!h) return;
+  if (!h) return false;
   await createUserOnHandle(h, steamID, name, eosID);
+  return true;
 }
 
 async function createUserOnHandle(
@@ -457,6 +452,7 @@ async function createUserOnHandle(
       lastAt: 0,
     },
     seedRole: false,
+    bonusAccrual: {},
     lastActiveAt: undefined,
   };
 
@@ -515,29 +511,69 @@ async function createUserOnHandle(
   );
 }
 
-export async function updateUserBonuses(
+export type BonusMinuteAwardStatus =
+  'awarded' | 'duplicate' | 'missing-user' | 'unavailable';
+
+export interface BonusMinuteAward {
+  steamID: string;
+  name: string;
+  baseBonus: number;
+  isSeed: boolean;
+  minuteSlot: number;
+}
+
+/**
+ * Идемпотентно начисляет одну минуту бонусов. Маркер хранится отдельно для
+ * каждого сервера, поэтому безопасный повтор после сетевой ошибки не удвоит
+ * выплату за ту же минуту.
+ */
+export async function awardUserBonusesForMinute(
   serverId: number,
-  steamID: string,
-  count: number,
-) {
+  award: BonusMinuteAward,
+): Promise<BonusMinuteAwardStatus> {
   const h = handle(serverId);
-  if (!h) return;
-  const collectionMain = h.main;
-  const collectionServerInfo = h.serverInfo;
+  if (!h) return 'unavailable';
 
-  const [userInfo, serverInfo] = await Promise.all([
-    collectionMain.findOne({ _id: steamID }),
-    collectionServerInfo.findOne({ _id: serverId.toString() }),
-  ]);
+  const user = await h.main.findOne(
+    { _id: award.steamID },
+    { projection: { _id: 1 } },
+  );
+  if (!user) return 'missing-user';
 
-  if (userInfo && userInfo.seedRole && serverInfo?.seeding) {
-    count = 5;
+  const slotPath = `bonusAccrual.${serverId}.lastMinuteSlot`;
+  const filter = {
+    _id: award.steamID,
+    [slotPath]: { $ne: award.minuteSlot },
+  } as Filter<Main>;
+  const mainInc: Record<string, number> = { bonuses: award.baseBonus };
+  if (award.isSeed) mainInc['squad.seed'] = 1;
+
+  const mainResult = await h.main.updateOne(filter, {
+    $inc: mainInc,
+    $set: { [slotPath]: award.minuteSlot },
+  } as UpdateFilter<Main>);
+
+  if (award.isSeed) {
+    const tempUpdate = {
+      $inc: { 'squad.seed': 1 },
+      $set: { [slotPath]: award.minuteSlot },
+    } as UpdateFilter<Main>;
+    const tempResult = await h.temp.updateOne(filter, tempUpdate);
+
+    // Самовосстановление для старой/частично удалённой tempstats-записи.
+    if (tempResult.matchedCount === 0) {
+      const tempUser = await h.temp.findOne(
+        { _id: award.steamID },
+        { projection: { _id: 1 } },
+      );
+      if (!tempUser) {
+        await createUserOnHandle(h, award.steamID, award.name);
+        await h.temp.updateOne(filter, tempUpdate);
+      }
+    }
   }
 
-  await collectionMain.updateOne(
-    { _id: steamID },
-    { $inc: { bonuses: count } },
-  );
+  return mainResult.matchedCount === 1 ? 'awarded' : 'duplicate';
 }
 
 const ROLE_KEYS = [
@@ -656,6 +692,7 @@ function tempInsertDefaults(name: string): Record<string, unknown> {
     weapons: {},
     matchHistory: [],
     seedRole: false,
+    bonusAccrual: {},
     lastActiveAt: undefined,
   };
 }

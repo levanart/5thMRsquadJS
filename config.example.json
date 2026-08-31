@@ -161,7 +161,14 @@
       {
         "name": "bonuses",
         "enabled": false,
-        "options": { "classicBonus": 1, "seedBonus": 2 }
+        "options": {
+          "classicBonus": 1,
+          "seedBonus": 2,
+          "minPlayers": 0,
+          "maxPlayersOnSeed": 20,
+          "seedKeyword": "Seed",
+          "seedLayers": []
+        }
       },
       {
         "name": "warnPlayers",
