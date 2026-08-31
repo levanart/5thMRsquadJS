@@ -16,6 +16,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "new:plugin": "ts-node scripts/new-plugin.ts",
+    "bot:start": "npm --prefix discord-bot start",
+    "bot:deploy": "npm --prefix discord-bot run commands:deploy",
+    "bot:remove": "npm --prefix discord-bot run commands:remove",
     "prepare": "husky install"
   },
   "dependencies": {

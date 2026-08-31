@@ -1,0 +1,6 @@
+node_modules/
+.env
+/stats.jpg
+/stats.png
+/leaderboard.png
+npm-debug.log*

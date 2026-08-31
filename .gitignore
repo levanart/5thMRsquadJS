@@ -134,6 +134,7 @@ dist
 #SquadJS
 
 package-lock.json
+!discord-bot/package-lock.json
 config.json
 
 # Сборка (пересоздаётся `yarn build` на проде)
