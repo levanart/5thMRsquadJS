@@ -5,8 +5,8 @@ Discord-бот работает совместно с основным серв�
 статистикой игроков и обновляет постоянные и недельные таблицы лидеров.
 
 Бот устанавливается на Debian 13 внутри общего проекта и запускается через PM2
-от текущего пользователя сервера. Отдельный системный пользователь и
-автоматический запуск через systemd не используются.
+от `root`. Отдельный системный пользователь и автоматический запуск через
+systemd не используются.
 
 ## Требования
 
@@ -29,9 +29,9 @@ Discord-бот работает совместно с основным серв�
 Бот использует нативный модуль `canvas`. На Debian установите:
 
 ```bash
-sudo apt update
+apt update
 
-sudo apt install -y \
+apt install -y \
   build-essential \
   python3 \
   pkg-config \
@@ -211,14 +211,14 @@ npm run commands:remove
 
 ## Запуск через PM2
 
-Запускайте процесс от того же пользователя, который устанавливал проект. Не
-используйте `sudo pm2`, если первоначальный запуск выполнялся без `sudo`.
+Запускайте процесс непосредственно от `root`, в окружении которого установлены
+NVM, Node.js и PM2. Добавлять перед командой `pm2` команду `sudo` не нужно.
 
 ```bash
 pm2 start /home/5thMRsquadJS/discord-bot/index.js \
   --name 5thmr-stats-discord \
   --cwd /home/5thMRsquadJS/discord-bot \
-  --interpreter /opt/nodejs-18.18.2/bin/node \
+  --interpreter /root/.nvm/versions/node/v18.18.2/bin/node \
   --time \
   --restart-delay 5000
 ```
@@ -253,6 +253,10 @@ pm2 save
 После перезагрузки сервера восстановите его вручную:
 
 ```bash
+export NVM_DIR="/root/.nvm"
+test -s "$NVM_DIR/nvm.sh" && . "$NVM_DIR/nvm.sh"
+
+nvm use 18.18.2
 pm2 resurrect
 pm2 status
 ```

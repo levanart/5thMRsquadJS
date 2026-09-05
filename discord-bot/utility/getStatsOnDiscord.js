@@ -1,10 +1,10 @@
 import { createCanvas, loadImage } from 'canvas';
 import { AttachmentBuilder } from 'discord.js';
-import * as fs from 'fs';
 import { MongoClient } from 'mongodb';
 import calcVehicleKills from './calcVehicleKills.js';
 import calcVehicleTime from './calcVehicleTime.js';
 import getExp from './getExp.js';
+import { imagePath } from './paths.js';
 
 async function loadImageAndDraw(
   ctx,
@@ -115,11 +115,11 @@ async function getStatsOnDiscord(dblink, steamId, interaction) {
     let canvas = createCanvas(width, height);
     let ctx = canvas.getContext('2d');
 
-    await loadImageAndDraw(ctx, './img/stats.jpg', 0, 0, 2560, 1440);
-    await loadImageAndDraw(ctx, `./img/${rank}.png`, 79, 296, 78, 44);
+    await loadImageAndDraw(ctx, imagePath('stats.jpg'), 0, 0, 2560, 1440);
+    await loadImageAndDraw(ctx, imagePath(`${rank}.png`), 79, 296, 78, 44);
     await loadImageAndDraw(
       ctx,
-      `./img/weapons/${resultArray[0][0].toLowerCase()}.png`,
+      imagePath('weapons', `${resultArray[0][0].toLowerCase()}.png`),
       93,
       1224,
       260,
@@ -127,13 +127,13 @@ async function getStatsOnDiscord(dblink, steamId, interaction) {
     );
     await loadImageAndDraw(
       ctx,
-      `./img/Icon_${role1Img}_kit.png`,
+      imagePath(`Icon_${role1Img}_kit.png`),
       770,
       1235,
       107,
       107,
     );
-    await loadImageAndDraw(ctx, `./img/${exp.img}.png`, 1644, 0);
+    await loadImageAndDraw(ctx, imagePath(`${exp.img}.png`), 1644, 0);
 
     const drawText = async (ctx, text, maxWidth, initialFontSize, x, y) => {
       let fontSize = initialFontSize;
@@ -233,8 +233,7 @@ async function getStatsOnDiscord(dblink, steamId, interaction) {
     ctx.strokeRect(x0, y0, width1, height1);
 
     const buffer = canvas.toBuffer('image/png');
-    fs.writeFileSync('./stats.jpg', buffer);
-    const imageToSend = new AttachmentBuilder('stats.jpg');
+    const imageToSend = new AttachmentBuilder(buffer, { name: 'stats.png' });
     interaction.editReply({ files: [imageToSend] });
     ctx = null;
     canvas = null;

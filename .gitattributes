@@ -1,1 +1,13 @@
-* eol=lf
+* text=auto eol=lf
+
+# Binary assets must be stored byte-for-byte. Applying EOL conversion to these
+# files corrupts PNG signatures and OpenType font data on checkout.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.otf binary
+*.ttf binary
+*.woff binary
+*.woff2 binary

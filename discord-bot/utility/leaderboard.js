@@ -1,6 +1,6 @@
 import { createCanvas, loadImage } from 'canvas';
 import { AttachmentBuilder } from 'discord.js';
-import * as fs from 'fs';
+import { imagePath } from './paths.js';
 import sortUsers from './sortUsers.js';
 
 const CANVAS_WIDTH = 2560;
@@ -158,7 +158,7 @@ const leaderboard = async ({
     const [players, message, img] = await Promise.all([
       sortUsers(db, sort, status),
       channel.messages.fetch(messageId),
-      loadImage('./img/leaderboard.jpg'),
+      loadImage(imagePath('leaderboard.jpg')),
     ]);
 
     const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -199,9 +199,9 @@ const leaderboard = async ({
     }
 
     const buffer = canvas.toBuffer('image/png');
-    await fs.promises.writeFile('./leaderboard.png', buffer);
-
-    const imageToSend = new AttachmentBuilder('./leaderboard.png');
+    const imageToSend = new AttachmentBuilder(buffer, {
+      name: 'leaderboard.png',
+    });
     message.edit({ files: [imageToSend] });
   }, seconds);
 };

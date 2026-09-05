@@ -11,8 +11,8 @@
 2. Discord-бот в каталоге [`discord-bot`](./discord-bot), который читает эту
    статистику, создаёт карточки игроков и обновляет таблицы лидеров в Discord.
 
-Оба сервиса рассчитаны на Debian 13 и запускаются через PM2 от текущего
-пользователя сервера. Отдельный системный пользователь не создаётся.
+Оба сервиса рассчитаны на Debian 13 и запускаются через PM2 от `root`. Отдельный
+системный пользователь не создаётся.
 
 ## Системные требования
 
@@ -49,9 +49,9 @@
 ### 1. Системные пакеты
 
 ```bash
-sudo apt update
+apt update
 
-sudo apt install -y \
+apt install -y \
   ca-certificates \
   curl \
   xz-utils \
@@ -71,62 +71,23 @@ Discord-бот использует для формирования изобра
 
 ### 2. Установка строго Node.js 18.18.2
 
-Не устанавливайте Node.js через `apt install nodejs` или NodeSource: эти способы
-не гарантируют точную версию `18.18.2`.
+Node.js устанавливается через NVM в домашнем каталоге `root`. Не используйте
+`apt install nodejs` или NodeSource: эти способы не гарантируют точную версию
+`18.18.2`.
 
-Проверьте архитектуру:
-
-```bash
-dpkg --print-architecture
-uname -m
-```
-
-Для дальнейших команд ожидаются `amd64` и `x86_64`.
-
-Скачайте официальный архив:
+Загрузите NVM в текущую оболочку:
 
 ```bash
-cd /tmp
-
-curl -fLO \
-  https://nodejs.org/download/release/v18.18.2/node-v18.18.2-linux-x64.tar.xz
+export NVM_DIR="/root/.nvm"
+test -s "$NVM_DIR/nvm.sh" && . "$NVM_DIR/nvm.sh"
 ```
 
-Проверьте контрольную сумму:
+Установите и выберите нужную версию:
 
 ```bash
-echo "75aba25ae76999309fc6c598efe56ce53fbfc221381a44a840864276264ab8ac  node-v18.18.2-linux-x64.tar.xz" \
-  | sha256sum --check
-```
-
-Ожидаемый результат:
-
-```text
-node-v18.18.2-linux-x64.tar.xz: OK
-```
-
-Распакуйте Node.js в отдельный каталог:
-
-```bash
-sudo mkdir -p /opt/nodejs-18.18.2
-
-sudo tar \
-  --extract \
-  --xz \
-  --file=/tmp/node-v18.18.2-linux-x64.tar.xz \
-  --directory=/opt/nodejs-18.18.2 \
-  --strip-components=1
-```
-
-Создайте системные ссылки:
-
-```bash
-sudo ln -sfn /opt/nodejs-18.18.2/bin/node /usr/local/bin/node
-sudo ln -sfn /opt/nodejs-18.18.2/bin/npm /usr/local/bin/npm
-sudo ln -sfn /opt/nodejs-18.18.2/bin/npx /usr/local/bin/npx
-sudo ln -sfn /opt/nodejs-18.18.2/bin/corepack /usr/local/bin/corepack
-
-hash -r
+nvm install 18.18.2
+nvm alias default 18.18.2
+nvm use 18.18.2
 ```
 
 Проверьте установку:
@@ -142,22 +103,13 @@ readlink -f "$(command -v node)"
 ```text
 v18.18.2
 9.8.1
-/opt/nodejs-18.18.2/bin/node
+/root/.nvm/versions/node/v18.18.2/bin/node
 ```
 
 ### 3. Установка Yarn и PM2
 
 ```bash
-sudo /opt/nodejs-18.18.2/bin/npm install \
-  --global \
-  --prefix /opt/nodejs-18.18.2 \
-  yarn@1.22.22 \
-  pm2
-
-sudo ln -sfn /opt/nodejs-18.18.2/bin/yarn /usr/local/bin/yarn
-sudo ln -sfn /opt/nodejs-18.18.2/bin/yarnpkg /usr/local/bin/yarnpkg
-sudo ln -sfn /opt/nodejs-18.18.2/bin/pm2 /usr/local/bin/pm2
-sudo ln -sfn /opt/nodejs-18.18.2/bin/pm2-runtime /usr/local/bin/pm2-runtime
+npm install --global yarn@1.22.22 pm2
 ```
 
 Проверьте команды:
@@ -169,13 +121,15 @@ yarn --version
 pm2 --version
 ```
 
+Все процессы PM2 запускаются от `root`, потому что Node.js и PM2 установлены в
+`/root/.nvm`. Не используйте для этого проекта PM2 другого пользователя.
+
 ## Размещение проекта
 
-Создайте каталог и назначьте владельцем текущего пользователя:
+Создайте каталог проекта:
 
 ```bash
-sudo mkdir -p /home/5thMRsquadJS
-sudo chown -R "$(id -un):$(id -gn)" /home/5thMRsquadJS
+mkdir -p /home/5thMRsquadJS
 ```
 
 Если проект хранится в Git:
@@ -184,12 +138,7 @@ sudo chown -R "$(id -un):$(id -gn)" /home/5thMRsquadJS
 git clone <адрес-репозитория> /home/5thMRsquadJS
 ```
 
-Если файлы переданы другим способом, разместите их в `/home/5thMRsquadJS` и
-проверьте владельца:
-
-```bash
-sudo chown -R "$(id -un):$(id -gn)" /home/5thMRsquadJS
-```
+Если файлы переданы другим способом, разместите их в `/home/5thMRsquadJS`.
 
 Не переносите `node_modules` с другого компьютера. Все зависимости, особенно
 нативный модуль `canvas`, должны устанавливаться на целевом сервере.
@@ -390,9 +339,9 @@ npm run commands:remove
 
 ## Запуск через PM2
 
-Оба процесса запускаются от текущего пользователя. Не используйте `sudo pm2`,
-если первоначальный запуск выполнялся без `sudo`: у `root` будет другой список
-процессов PM2.
+Оба процесса запускаются от `root`, в окружении которого установлены NVM,
+Node.js и PM2. Команды выполняются непосредственно в оболочке `root`, поэтому
+добавлять перед `pm2` команду `sudo` не нужно.
 
 Не используйте кластерный режим и параметр `-i max`. Каждому сервису нужен один
 процесс.
@@ -403,7 +352,7 @@ npm run commands:remove
 pm2 start /home/5thMRsquadJS/lib/index.js \
   --name 5thmr-squad-rcon \
   --cwd /home/5thMRsquadJS \
-  --interpreter /opt/nodejs-18.18.2/bin/node \
+  --interpreter /root/.nvm/versions/node/v18.18.2/bin/node \
   --time \
   --restart-delay 5000
 ```
@@ -414,7 +363,7 @@ pm2 start /home/5thMRsquadJS/lib/index.js \
 pm2 start /home/5thMRsquadJS/discord-bot/index.js \
   --name 5thmr-stats-discord \
   --cwd /home/5thMRsquadJS/discord-bot \
-  --interpreter /opt/nodejs-18.18.2/bin/node \
+  --interpreter /root/.nvm/versions/node/v18.18.2/bin/node \
   --time \
   --restart-delay 5000
 ```
@@ -438,6 +387,10 @@ PM2 перезапустит процесс после программного 
 После перезагрузки сервера восстановите ранее сохранленный список вручную:
 
 ```bash
+export NVM_DIR="/root/.nvm"
+test -s "$NVM_DIR/nvm.sh" && . "$NVM_DIR/nvm.sh"
+
+nvm use 18.18.2
 pm2 resurrect
 pm2 status
 ```
