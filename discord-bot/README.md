@@ -70,7 +70,7 @@ test "$(node --version)" = "v18.18.2" || {
 Установите зависимости строго из `package-lock.json`:
 
 ```bash
-cd /opt/5thMRsquadJS/discord-bot
+cd /home/5thMRsquadJS/discord-bot
 npm ci
 ```
 
@@ -94,7 +94,7 @@ node --check index.js
 Создайте рабочий файл:
 
 ```bash
-cd /opt/5thMRsquadJS/discord-bot
+cd /home/5thMRsquadJS/discord-bot
 cp .env.example .env
 nano .env
 chmod 600 .env
@@ -143,7 +143,7 @@ STEAM_API=вставьте_ключ_steam_api
 Откройте конфигурацию:
 
 ```bash
-nano /opt/5thMRsquadJS/discord-bot/config.js
+nano /home/5thMRsquadJS/discord-bot/config.js
 ```
 
 Проверьте следующие значения:
@@ -197,7 +197,7 @@ curl --proxy http://127.0.0.1:1080 \
 Команды регистрируются при первой установке и после изменения их структуры:
 
 ```bash
-cd /opt/5thMRsquadJS/discord-bot
+cd /home/5thMRsquadJS/discord-bot
 npm run commands:deploy
 ```
 
@@ -215,9 +215,9 @@ npm run commands:remove
 используйте `sudo pm2`, если первоначальный запуск выполнялся без `sudo`.
 
 ```bash
-pm2 start /opt/5thMRsquadJS/discord-bot/index.js \
+pm2 start /home/5thMRsquadJS/discord-bot/index.js \
   --name 5thmr-stats-discord \
-  --cwd /opt/5thMRsquadJS/discord-bot \
+  --cwd /home/5thMRsquadJS/discord-bot \
   --interpreter /opt/nodejs-18.18.2/bin/node \
   --time \
   --restart-delay 5000
@@ -274,7 +274,7 @@ pm2 describe 5thmr-stats-discord
 ## Обновление Discord-бота
 
 ```bash
-cd /opt/5thMRsquadJS
+cd /home/5thMRsquadJS
 
 test "$(node --version)" = "v18.18.2" || {
   echo "Обновление остановлено: требуется Node.js v18.18.2"
@@ -326,7 +326,7 @@ npm --prefix discord-bot run commands:deploy
 Проверьте, что PM2 запустил процесс с рабочим каталогом:
 
 ```text
-/opt/5thMRsquadJS/discord-bot
+/home/5thMRsquadJS/discord-bot
 ```
 
 ### MongoDB не отвечает

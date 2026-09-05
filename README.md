@@ -32,7 +32,7 @@
 ## Рекомендуемая структура на сервере
 
 ```text
-/opt/5thMRsquadJS/
+/home/5thMRsquadJS/
 ├── src/                       исходный код основного сервиса
 ├── lib/                       результат команды yarn build
 ├── discord-bot/               Discord-бот статистики
@@ -174,21 +174,21 @@ pm2 --version
 Создайте каталог и назначьте владельцем текущего пользователя:
 
 ```bash
-sudo mkdir -p /opt/5thMRsquadJS
-sudo chown -R "$(id -un):$(id -gn)" /opt/5thMRsquadJS
+sudo mkdir -p /home/5thMRsquadJS
+sudo chown -R "$(id -un):$(id -gn)" /home/5thMRsquadJS
 ```
 
 Если проект хранится в Git:
 
 ```bash
-git clone <адрес-репозитория> /opt/5thMRsquadJS
+git clone <адрес-репозитория> /home/5thMRsquadJS
 ```
 
-Если файлы переданы другим способом, разместите их в `/opt/5thMRsquadJS` и
+Если файлы переданы другим способом, разместите их в `/home/5thMRsquadJS` и
 проверьте владельца:
 
 ```bash
-sudo chown -R "$(id -un):$(id -gn)" /opt/5thMRsquadJS
+sudo chown -R "$(id -un):$(id -gn)" /home/5thMRsquadJS
 ```
 
 Не переносите `node_modules` с другого компьютера. Все зависимости, особенно
@@ -208,7 +208,7 @@ test "$(node --version)" = "v18.18.2" || {
 Установите зависимости основного сервиса:
 
 ```bash
-cd /opt/5thMRsquadJS
+cd /home/5thMRsquadJS
 HUSKY=0 yarn install --frozen-lockfile
 ```
 
@@ -226,7 +226,7 @@ npm --prefix discord-bot ci
 ### Переменные окружения
 
 ```bash
-cd /opt/5thMRsquadJS
+cd /home/5thMRsquadJS
 cp .env.example .env
 nano .env
 chmod 600 .env
@@ -243,7 +243,7 @@ chmod 600 .env
 ### Конфигурация серверов
 
 ```bash
-cd /opt/5thMRsquadJS
+cd /home/5thMRsquadJS
 cp config.example.json config.json
 nano config.json
 chmod 600 config.json
@@ -252,7 +252,7 @@ chmod 600 config.json
 Проверьте синтаксис:
 
 ```bash
-node -e "JSON.parse(require('fs').readFileSync('/opt/5thMRsquadJS/config.json', 'utf8')); console.log('config.json: корректный JSON')"
+node -e "JSON.parse(require('fs').readFileSync('/home/5thMRsquadJS/config.json', 'utf8')); console.log('config.json: корректный JSON')"
 ```
 
 `config.json` — объект, где каждый ключ верхнего уровня является числовым
@@ -311,7 +311,7 @@ node -e "JSON.parse(require('fs').readFileSync('/opt/5thMRsquadJS/config.json', 
 Краткая подготовка:
 
 ```bash
-cd /opt/5thMRsquadJS/discord-bot
+cd /home/5thMRsquadJS/discord-bot
 cp .env.example .env
 nano .env
 chmod 600 .env
@@ -348,7 +348,7 @@ curl --proxy http://127.0.0.1:1080 \
 ## Сборка и проверка
 
 ```bash
-cd /opt/5thMRsquadJS
+cd /home/5thMRsquadJS
 
 test "$(node --version)" = "v18.18.2" || exit 1
 
@@ -359,14 +359,14 @@ yarn build
 Проверьте сборку:
 
 ```bash
-test -f /opt/5thMRsquadJS/lib/index.js \
+test -f /home/5thMRsquadJS/lib/index.js \
   && echo "Основной сервис успешно собран"
 ```
 
 Проверьте Discord-бота и `canvas`:
 
 ```bash
-cd /opt/5thMRsquadJS/discord-bot
+cd /home/5thMRsquadJS/discord-bot
 
 node --check index.js
 
@@ -378,7 +378,7 @@ node -e "import('canvas').then(() => console.log('canvas: готов')).catch(er
 Выполняется при первой установке и после изменения структуры команд:
 
 ```bash
-cd /opt/5thMRsquadJS/discord-bot
+cd /home/5thMRsquadJS/discord-bot
 npm run commands:deploy
 ```
 
@@ -400,9 +400,9 @@ npm run commands:remove
 Запустите основной сервис:
 
 ```bash
-pm2 start /opt/5thMRsquadJS/lib/index.js \
+pm2 start /home/5thMRsquadJS/lib/index.js \
   --name 5thmr-squad-rcon \
-  --cwd /opt/5thMRsquadJS \
+  --cwd /home/5thMRsquadJS \
   --interpreter /opt/nodejs-18.18.2/bin/node \
   --time \
   --restart-delay 5000
@@ -411,9 +411,9 @@ pm2 start /opt/5thMRsquadJS/lib/index.js \
 Запустите Discord-бота:
 
 ```bash
-pm2 start /opt/5thMRsquadJS/discord-bot/index.js \
+pm2 start /home/5thMRsquadJS/discord-bot/index.js \
   --name 5thmr-stats-discord \
-  --cwd /opt/5thMRsquadJS/discord-bot \
+  --cwd /home/5thMRsquadJS/discord-bot \
   --interpreter /opt/nodejs-18.18.2/bin/node \
   --time \
   --restart-delay 5000
@@ -481,7 +481,7 @@ pm2 set pm2-logrotate:compress true
 ## Обновление проекта
 
 ```bash
-cd /opt/5thMRsquadJS
+cd /home/5thMRsquadJS
 
 test "$(node --version)" = "v18.18.2" || {
   echo "Обновление остановлено: требуется Node.js v18.18.2"
@@ -525,9 +525,9 @@ npm --prefix discord-bot run commands:deploy
 Не сохраняйте в Git:
 
 ```text
-/opt/5thMRsquadJS/.env
-/opt/5thMRsquadJS/config.json
-/opt/5thMRsquadJS/discord-bot/.env
+/home/5thMRsquadJS/.env
+/home/5thMRsquadJS/config.json
+/home/5thMRsquadJS/discord-bot/.env
 ```
 
 ## Плагины основного сервиса
