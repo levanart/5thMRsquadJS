@@ -15,9 +15,12 @@ export default definePlugin({
   setup({ state, options, logger, registerDisposable }) {
     const { execute } = state;
     const { texts, interval } = options;
+    const messages = texts.map((text) => text.trim()).filter(Boolean);
 
-    if (texts.length === 0) {
-      logger.warn('broadcast: список "texts" пуст — рассылка не запущена.');
+    if (messages.length === 0) {
+      logger.warn(
+        'broadcast: список "texts" не содержит непустых сообщений — рассылка не запущена.',
+      );
       return;
     }
 
@@ -26,9 +29,11 @@ export default definePlugin({
       const players = getPlayers(state);
       if (!players || players.length === 0) return;
 
-      adminBroadcast(execute, texts[index]);
+      void adminBroadcast(execute, messages[index]).catch((error) =>
+        logger.error(`broadcast: ошибка отправки сообщения: ${String(error)}`),
+      );
 
-      index = (index + 1) % texts.length;
+      index = (index + 1) % messages.length;
     };
 
     const timer = setInterval(printText, interval);

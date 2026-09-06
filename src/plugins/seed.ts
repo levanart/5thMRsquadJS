@@ -79,8 +79,6 @@ export default definePlugin({
 
     const applySwitch = async () => {
       clearTimers();
-      switching = false;
-      handledThisRound = true;
       const layer = pickSeed();
       try {
         if (mode === 'now') {
@@ -94,8 +92,11 @@ export default definePlugin({
             `[seed] AdminSetNextLayer ${layer} (игроков ${playerCount()})`,
           );
         }
+        handledThisRound = true;
       } catch (e) {
         logger.error(`[seed] ошибка переключения: ${String(e)}`);
+      } finally {
+        switching = false;
       }
     };
 
